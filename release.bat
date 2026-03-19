@@ -12,6 +12,6 @@ git commit -m "%msg%"
 
 :: Отправка
 echo Pushing to remote...
-git push
+git push origin main --force
 
 pause
