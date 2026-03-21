@@ -3,7 +3,6 @@ name: Release Discord Notification
 on:
   release:
     types: [published]
-  workflow_dispatch:
 
 jobs:
   notify:
@@ -20,13 +19,18 @@ jobs:
         run: |
           python3 << 'PYEOF'
           import os
+          import sys
           import json
           import urllib.request
 
-          webhook_url = os.environ["DISCORD_WEBHOOK"]
-          tag = os.environ["RELEASE_TAG"]
-          body = os.environ["RELEASE_BODY"]
-          timestamp = os.environ["RELEASE_TIME"]
+          webhook_url = os.environ.get("DISCORD_WEBHOOK", "").strip()
+          tag = os.environ.get("RELEASE_TAG", "").strip() or "v?.?.? (Manual Trigger)"
+          body = os.environ.get("RELEASE_BODY", "").strip()
+          timestamp = os.environ.get("RELEASE_TIME", "").strip()
+
+          if not webhook_url:
+              print("Error: DISCORD_WEBHOOK secret is empty or not set.")
+              sys.exit(1)
 
           sections = {"add": [], "upd": [], "fix": [], "kill": []}
           current = None
@@ -59,23 +63,27 @@ jobs:
               if value:
                   fields.append({"name": name, "value": value})
 
+          # assemble the embed
+          embed = {
+              "title": "<:bestupdate:1484889537217036298> | New BestClient Update!",
+              "description": f"> **{tag}**\n> [Download Here](https://bestclient.fun)",
+              "color": 5829514,
+              "fields": fields,
+              "footer": {
+                  "text": "update webhook was made by @noxygalaxy",
+                  "icon_url": "https://cdn.discordapp.com/avatars/623924391356399616/4e7b5d7b8c7e9f46fbda2107fc278bb6.png?size=512"
+              }
+          }
+
+          # Discord API returns 400 or 403 if timestamp is provided but empty
+          if timestamp:
+              embed["timestamp"] = timestamp
+
           # assemble the payload
           payload = {
               "username": "! Lunar",
               "avatar_url": "https://cdn.discordapp.com/avatars/1360125728435343522/d0c7fb8e49b337ff25f6333e7dd639c9.png?size=512",
-              "embeds": [
-                  {
-                      "title": "<:bestupdate:1484889537217036298> | New BestClient Update!",
-                      "description": f"> **{tag}**\n> [Download Here](https://bestclient.fun)",
-                      "color": 5829514,
-                      "fields": fields,
-                      "footer": {
-                          "text": "update webhook was made by @noxygalaxy",
-                          "icon_url": "https://cdn.discordapp.com/avatars/623924391356399616/4e7b5d7b8c7e9f46fbda2107fc278bb6.png?size=512"
-                      },
-                      "timestamp": timestamp
-                  }
-              ],
+              "embeds": [embed],
               "components": []
           }
 
@@ -86,7 +94,7 @@ jobs:
               data=data,
               headers={
                   "Content-Type": "application/json",
-                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+                  "User-Agent": "BestClientReleaseBot/1.0"
               },
               method="POST"
           )
@@ -97,10 +105,13 @@ jobs:
           except urllib.error.HTTPError as e:
               print(f"HTTP Error {e.code}: {e.reason}")
               try:
-                  print(f"Response body: {e.read().decode('utf-8')}")
+                  err_body = e.read().decode('utf-8')
+                  print(f"Discord Response Body:\n{err_body}")
               except Exception:
                   pass
-              raise
-
+              sys.exit(1)
+          except Exception as e:
+              print(f"Unexpected error: {e}")
+              sys.exit(1)
 
           PYEOF
