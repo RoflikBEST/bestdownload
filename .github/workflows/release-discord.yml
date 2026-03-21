@@ -83,11 +83,23 @@ jobs:
           req = urllib.request.Request(
               webhook_url,
               data=data,
-              headers={"Content-Type": "application/json"},
+              headers={
+                  "Content-Type": "application/json",
+                  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+              },
               method="POST"
           )
 
-          with urllib.request.urlopen(req) as resp:
-              print(f"Discord response: {resp.status} {resp.reason}")
+          try:
+              with urllib.request.urlopen(req) as resp:
+                  print(f"Discord response: {resp.status} {resp.reason}")
+          except urllib.error.HTTPError as e:
+              print(f"HTTP Error {e.code}: {e.reason}")
+              try:
+                  print(f"Response body: {e.read().decode('utf-8')}")
+              except Exception:
+                  pass
+              raise
+
 
           PYEOF
