@@ -81,6 +81,7 @@ jobs:
 
           # assemble the payload
           payload = {
+              "content": "<@&1484887603890225173>",
               "username": "! Lunar",
               "avatar_url": "https://cdn.discordapp.com/avatars/1360125728435343522/d0c7fb8e49b337ff25f6333e7dd639c9.png?size=512",
               "embeds": [embed],
