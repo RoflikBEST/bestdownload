@@ -1,0 +1,93 @@
+name: Release Discord Notification
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  notify:
+    name: Send Discord Webhook
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Parse release and send webhook
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          RELEASE_TIME: ${{ github.event.release.published_at }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          import json
+          import urllib.request
+
+          webhook_url = os.environ["DISCORD_WEBHOOK"]
+          tag = os.environ["RELEASE_TAG"]
+          body = os.environ["RELEASE_BODY"]
+          timestamp = os.environ["RELEASE_TIME"]
+
+          sections = {"add": [], "upd": [], "fix": [], "kill": []}
+          current = None
+
+          for raw_line in body.splitlines():
+              line = raw_line.strip()
+              lower = line.lower().rstrip(":")
+
+              if lower in sections:
+                  current = lower
+              elif current and line:
+                  sections[current].append(line)
+
+          def make_value(items):
+              if not items:
+                  return None
+              return "\n".join(f"- {item}" for item in items)
+
+          # build embed fields, skip empty sections
+          field_map = [
+              ("add", "[ + ] Added"),
+              ("upd", "[ ± ] Updated"),
+              ("fix", "[ ~ ] Fixed"),
+              ("kill", "[ <:bestlightning:1447966904701685896> ] Killer Features"),
+          ]
+
+          fields = []
+          for key, name in field_map:
+              value = make_value(sections[key])
+              if value:
+                  fields.append({"name": name, "value": value})
+
+          # assemble the payload
+          payload = {
+              "username": "! Lunar",
+              "avatar_url": "https://cdn.discordapp.com/avatars/1360125728435343522/d0c7fb8e49b337ff25f6333e7dd639c9.png?size=512",
+              "embeds": [
+                  {
+                      "title": "<:bestupdate:1484889537217036298> | New BestClient Update!",
+                      "description": f"> **{tag}**\n> [Download Here](https://bestclient.fun)",
+                      "color": 5829514,
+                      "fields": fields,
+                      "footer": {
+                          "text": "update webhook was made by @noxygalaxy",
+                          "icon_url": "https://cdn.discordapp.com/avatars/623924391356399616/4e7b5d7b8c7e9f46fbda2107fc278bb6.png?size=512"
+                      },
+                      "timestamp": timestamp
+                  }
+              ],
+              "components": []
+          }
+
+          # send it
+          data = json.dumps(payload).encode("utf-8")
+          req = urllib.request.Request(
+              webhook_url,
+              data=data,
+              headers={"Content-Type": "application/json"},
+              method="POST"
+          )
+
+          with urllib.request.urlopen(req) as resp:
+              print(f"Discord response: {resp.status} {resp.reason}")
+
+          PYEOF
