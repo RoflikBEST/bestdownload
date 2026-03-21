@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>DL/BC</title>
+  <script>
+    fetch("https://api.github.com/repos/RoflikBEST/bestdownload/releases/latest")
+      .then(res => res.json())
+      .then(release => {
+        const asset = release.assets.find(a => a.name === "bestclient.tar.xz");
+        if (asset) {
+          window.location.href = asset.browser_download_url;
+        } else {
+          document.getElementById("msg").textContent = "File not found in latest release.";
+        }
+      })
+      .catch(() => {
+        document.getElementById("msg").textContent = "Failed to fetch download link.";
+      });
+  </script>
+</head>
+<body>
+  <p id="msg">please wait.</p>
+</body>
+</html>
