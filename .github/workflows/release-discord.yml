@@ -22,6 +22,7 @@ jobs:
           import sys
           import json
           import urllib.request
+          import re
 
           webhook_url = os.environ.get("DISCORD_WEBHOOK", "").strip()
           tag = os.environ.get("RELEASE_TAG", "").strip() or "v?.?.? (Manual Trigger)"
@@ -33,23 +34,39 @@ jobs:
               sys.exit(1)
 
           sections = {"add": [], "upd": [], "fix": [], "kill": []}
-          current = None
+          aliases = {
+              "add": "add", "added": "add", "adds": "add", "+": "add",
+              "upd": "upd", "update": "upd", "updated": "upd", "updates": "upd", "±": "upd",
+              "fix": "fix", "fixed": "fix", "fixes": "fix", "bug": "fix", "bugs": "fix", "~": "fix",
+              "kill": "kill", "killer": "kill", "features": "kill", "lightning": "kill"
+          }
 
+          current = None
           for raw_line in body.splitlines():
               line = raw_line.strip()
-              lower = line.lower().rstrip(":")
+              if not line: continue
 
-              if lower in sections:
-                  current = lower
-              elif current and line:
-                  sections[current].append(line)
+              header_match = re.match(r'^[#\s*-]*([a-zA-Z+±~]+)[:\s-]*(.*)$', line)
+              if header_match:
+                  prefix = header_match.group(1).lower()
+                  if prefix in aliases:
+                      current = aliases[prefix]
+                      content = header_match.group(2).strip()
+                      if content:
+                          sections[current].append(re.sub(r'^[*-]\s*', '', content))
+                      continue
+
+              if current:
+                  item = re.sub(r'^[*-]\s*', '', line)
+                  if item:
+                      sections[current].append(item)
 
           def make_value(items):
               if not items:
                   return None
-              return "\n".join(f"- {item}" for item in items)
+              val = "\n".join(f"- {item}" for item in items)
+              return val[:1021] + "..." if len(val) > 1024 else val
 
-          # build embed fields, skip empty sections
           field_map = [
               ("add", "[ + ] Added"),
               ("upd", "[ ± ] Updated"),
@@ -68,7 +85,7 @@ jobs:
               "title": "<:bestupdate:1484889537217036298> | New BestClient Update!",
               "description": f"> **{tag}**\n> [Download Here](https://bestclient.fun)",
               "color": 5829514,
-              "fields": fields,
+              "fields": fields[:25],
               "footer": {
                   "text": "update webhook was made by @noxygalaxy",
                   "icon_url": "https://cdn.discordapp.com/avatars/623924391356399616/4e7b5d7b8c7e9f46fbda2107fc278bb6.png?size=512"
@@ -101,14 +118,15 @@ jobs:
           )
 
           try:
-              with urllib.request.urlopen(req) as resp:
+              with urllib.request.urlopen(req, timeout=15) as resp:
                   print(f"Discord response: {resp.status} {resp.reason}")
           except urllib.error.HTTPError as e:
               print(f"HTTP Error {e.code}: {e.reason}")
               try:
                   err_body = e.read().decode('utf-8')
-                  print(f"Discord Response Body:\n{err_body}")
-              except Exception:
+                  print(f"Discord Response Body (JSON):")
+                  print(json.dumps(json.loads(err_body), indent=2))
+              except:
                   pass
               sys.exit(1)
           except Exception as e:
