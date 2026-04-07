@@ -2,7 +2,7 @@ name: Release Discord Notification
 
 on:
   release:
-    types: [published, edited, released]
+    types: [published, edited]
 
 jobs:
   notify:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Parse release and send webhook
+      - name: Send Discord Webhook
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
@@ -18,79 +18,33 @@ jobs:
           RELEASE_TIME: ${{ github.event.release.published_at }}
         run: |
           python3 << 'PYEOF'
-          import os, sys, json, urllib.request, re
-      
+          import os, sys, json, urllib.request
+
           webhook_url = os.environ.get("DISCORD_WEBHOOK", "").strip()
-          tag = os.environ.get("RELEASE_TAG", "").strip() or "v?.?.? (Manual Trigger)"
+          tag = os.environ.get("RELEASE_TAG", "").strip() or "v?.?.?"
           body = os.environ.get("RELEASE_BODY", "").strip()
           timestamp = os.environ.get("RELEASE_TIME", "").strip()
 
           if not webhook_url:
-              print("Error: DISCORD_WEBHOOK secret is empty or not set.")
+              print("Error: DISCORD_WEBHOOK secret is not set.")
               sys.exit(1)
-      
-          body = body.replace('\\r\\n', '\n').replace('\\n', '\n').replace('\\r', '\n')
-      
-          sections = {"add": [], "upd": [], "fix": [], "kill": []}
-          aliases = {
-              "add": "add", "added": "add", "adds": "add", "+": "add",
-              "upd": "upd", "update": "upd", "updated": "upd", "updates": "upd", "±": "upd",
-              "fix": "fix", "fixed": "fix", "fixes": "fix", "bug": "fix", "bugs": "fix", "~": "fix",
-              "kill": "kill", "killer": "kill", "features": "kill", "lightning": "kill"
-          }
-      
-          current = None
-          for raw_line in body.splitlines():
-              line = raw_line.strip()
-              if not line:
-                  continue
-              header_match = re.match(r'^[#\s*-]*([a-zA-Z+±~]+)[:\s-]*(.*)$', line)
-              if header_match:
-                  prefix = header_match.group(1).lower()
-                  if prefix in aliases:
-                      current = aliases[prefix]
-                      content = header_match.group(2).strip()
-                      if content:
-                          sections[current].append(re.sub(r'^[*-]\s*', '', content))
-                      continue
-              if current:
-                  item = re.sub(r'^[*-]\s*', '', line)
-                  if item:
-                      sections[current].append(item)
-      
-          def make_value(items):
-              if not items:
-                  return None
-              val = "\n".join(f"- {item}" for item in items)
-              return val[:1021] + "..." if len(val) > 1024 else val
-      
-          field_map = [
-              ("add", "[ + ] Added"),
-              ("upd", "[ ± ] Updated"),
-              ("fix", "[ ~ ] Fixed"),
-              ("kill", "[ <:bestlightning:1447966904701685896> ] Killer Features"),
-          ]
-      
-          fields = []
-          for key, name in field_map:
-              value = make_value(sections[key])
-              if value:
-                  fields.append({"name": name, "value": value})
-      
+
+          body = body.replace('\\r\\n', '\n').replace('\\n', '\n').replace('\\r', '\n').strip()
+
+          description = f"> **{tag}**\n> [Download Here](https://bestclient.fun/)\n\n{body}"
+
           embed = {
-              "title": "<:bestupdate:1484889537217036298> | New BestClient Update!",
-              "description": f"> **{tag}**\n> [Download Here](https://bestclient.fun)",
+              "description": description[:4096],
               "color": 5829514,
-              "fields": fields[:25],
               "footer": {
                   "text": "update webhook was made by @noxygalaxy",
                   "icon_url": "https://cdn.discordapp.com/avatars/623924391356399616/4e7b5d7b8c7e9f46fbda2107fc278bb6.png?size=512"
               }
           }
-      
+
           if timestamp:
               embed["timestamp"] = timestamp
-      
+
           payload = {
               "content": "<@&1484887603890225173>",
               "username": "! Lunar",
@@ -98,14 +52,14 @@ jobs:
               "embeds": [embed],
               "components": []
           }
-      
+
           data = json.dumps(payload).encode("utf-8")
           req = urllib.request.Request(
               webhook_url, data=data,
               headers={"Content-Type": "application/json", "User-Agent": "BestClientReleaseBot/1.0"},
               method="POST"
           )
-      
+
           try:
               with urllib.request.urlopen(req, timeout=15) as resp:
                   print(f"Discord response: {resp.status} {resp.reason}")
@@ -119,5 +73,5 @@ jobs:
           except Exception as e:
               print(f"Unexpected error: {e}")
               sys.exit(1)
-      
+
           PYEOF
